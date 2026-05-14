@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CI Caribbean Dashboard — Argos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<!-- SheetJS for reading Excel files -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --color-bg:         #FFFFFF;
+  --color-bg-alt:     #F5F6F7;
+  --color-navy:       #101B46;
+  --color-navy-20:    rgba(16, 27, 70, 0.20);
+  --color-navy-10:    rgba(16, 27, 70, 0.10);
+  --color-lime:       #C2D500;
+  --color-teal:       #00B580;
+  --color-text:       #101B46;
+  --color-text-muted: #4A5568;
+  --color-soft:       #9AA0B2;
+  --color-red:        #D32F2F;
+  --color-amber:      #F7B500;
+  --color-green:      #2E8540;
+  --font-display:     'Barlow Condensed', sans-serif;
+  --font-body:        'Barlow', sans-serif;
+  --radius:           6px;
+  --shadow:           0 2px 8px rgba(16, 27, 70, 0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.dashboard {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 32px 40px 24px;
+}
+
+/* === LOAD STATES === */
+.loader {
+  position: fixed; inset: 0;
+  background: white;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px;
+  z-index: 1000;
+}
+.loader.hidden { display: none; }
+.loader-spinner {
+  width: 60px; height: 60px;
+  border: 4px solid var(--color-bg-alt);
+  border-top-color: var(--color-lime);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loader-text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-navy);
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+.loader-sub {
+  font-family: var(--font-body);
+  color: var(--color-text-muted);
+  font-size: 13px;
+  max-width: 400px;
+  text-align: center;
+}
+
+/* === ERROR STATE === */
+.error-state {
+  background: #FEF2F2;
+  border-left: 4px solid var(--color-red);
+  padding: 24px 28px;
+  border-radius: 6px;
+  margin: 40px auto;
+  max-width: 800px;
+}
+.error-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-red);
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+.error-msg {
+  color: var(--color-text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.error-msg code {
+  background: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+.upload-btn {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 10px 20px;
+  background: var(--color-navy);
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+}
+.upload-btn:hover { background: #2A3458; }
+.upload-btn input { display: none; }
+
+/* === HEADER === */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--color-navy-10);
+  margin-bottom: 28px;
+}
+.brand {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.18em;
+  color: var(--color-navy);
+}
+.header-title h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 36px;
+  color: var(--color-navy);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.header-title .subtitle {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+.header-meta {
+  text-align: right;
+  font-family: var(--font-body);
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+.header-meta .live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-teal);
+  margin-right: 6px;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.reload-btn {
+  background: var(--color-navy);
+  color: white;
+  border: none;
+  padding: 6px 14px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+.reload-btn:hover { background: #2A3458; }
+
+/* === KPI CARDS === */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--color-bg);
+  border-left: 4px solid var(--color-lime);
+  padding: 20px 22px 18px;
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+}
+.kpi-card.teal { border-left-color: var(--color-teal); }
+.kpi-card.navy { border-left-color: var(--color-navy); }
+.kpi-label {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
+}
+.kpi-value {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 44px;
+  color: var(--color-navy);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.kpi-value .unit {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-left: 4px;
+}
+.kpi-sub {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+}
+
+/* === SECTIONS === */
+.section-row {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.row-1-1 { grid-template-columns: 1fr 1fr; }
+.row-2-1 { grid-template-columns: 2fr 1fr; }
+.row-full { grid-template-columns: 1fr; }
+
+.panel {
+  background: var(--color-bg);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--shadow);
+  border-top: 3px solid var(--color-navy);
+}
+.panel.accent { border-top-color: var(--color-lime); }
+.panel.teal { border-top-color: var(--color-teal); }
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 18px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-navy-10);
+}
+.panel-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--color-navy);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.panel-context {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* === DONUT === */
+.donut-container { display: flex; align-items: center; gap: 28px; }
+.donut-svg { width: 180px; height: 180px; flex-shrink: 0; }
+.donut-center { font-family: var(--font-display); font-weight: 800; fill: var(--color-navy); }
+.donut-center-label { font-family: var(--font-body); font-weight: 500; fill: var(--color-text-muted); }
+.donut-legend { flex: 1; display: flex; flex-direction: column; gap: 9px; }
+.donut-legend-item { display: flex; align-items: center; font-family: var(--font-body); font-size: 13px; }
+.donut-legend-dot { width: 10px; height: 10px; border-radius: 2px; margin-right: 10px; flex-shrink: 0; }
+.donut-legend-label { color: var(--color-text); flex: 1; }
+.donut-legend-value { font-weight: 700; color: var(--color-navy); font-family: var(--font-display); }
+
+/* === FUNNEL === */
+.funnel { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+.funnel-step {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; background: var(--color-navy); color: white; border-radius: 4px;
+}
+.funnel-step.s1 { width: 100%; }
+.funnel-step.s2 { width: 82%; background: #2A3458; }
+.funnel-step.s3 { width: 60%; background: #4A5378; }
+.funnel-step.s4 { width: 32%; background: var(--color-teal); }
+.funnel-label { font-family: var(--font-body); font-size: 13px; font-weight: 500; }
+.funnel-value { font-family: var(--font-display); font-size: 24px; font-weight: 800; }
+.funnel-conversion {
+  text-align: center; font-family: var(--font-body); font-size: 11px;
+  color: var(--color-text-muted); padding: 4px 0; letter-spacing: 0.04em;
+}
+.funnel-conversion strong { color: var(--color-navy); font-weight: 700; }
+
+/* === SAVINGS CHART === */
+.savings-chart { position: relative; height: 220px; margin-top: 8px; }
+.savings-svg { width: 100%; height: 100%; overflow: visible; }
+.line-actual { stroke: var(--color-navy); stroke-width: 2.5; fill: none; }
+.line-target { stroke: var(--color-soft); stroke-width: 1.5; stroke-dasharray: 4 4; fill: none; }
+.line-area { fill: var(--color-lime); opacity: 0.18; }
+.dot-actual { fill: var(--color-navy); }
+.dot-current { fill: var(--color-lime); stroke: var(--color-navy); stroke-width: 2; }
+.axis-line { stroke: var(--color-navy-10); stroke-width: 1; }
+.axis-label { font-family: var(--font-body); font-size: 10px; fill: var(--color-text-muted); }
+.savings-legend {
+  display: flex; gap: 22px; margin-top: 12px;
+  font-family: var(--font-body); font-size: 12px; color: var(--color-text-muted);
+}
+.savings-legend-item { display: flex; align-items: center; gap: 6px; }
+.savings-legend-line { width: 18px; height: 2px; }
+
+/* === TABLE === */
+.projects-table { width: 100%; border-collapse: collapse; }
+.projects-table thead th {
+  background: var(--color-navy); color: white;
+  font-family: var(--font-body); font-size: 11px; font-weight: 600;
+  text-align: left; padding: 10px 12px; letter-spacing: 0.04em; text-transform: uppercase;
+}
+.projects-table thead th:last-child { text-align: right; }
+.projects-table tbody tr { border-bottom: 1px solid var(--color-navy-10); }
+.projects-table tbody tr:nth-child(even) { background: var(--color-bg-alt); }
+.projects-table tbody td {
+  padding: 11px 12px; font-family: var(--font-body); font-size: 12px;
+  color: var(--color-text); vertical-align: middle;
+}
+.projects-table tbody td:last-child {
+  text-align: right; font-family: var(--font-display); font-weight: 700; color: var(--color-navy);
+}
+.tag {
+  display: inline-block; padding: 3px 9px; border-radius: 3px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; font-family: var(--font-body);
+}
+.tag-closed { background: #DFF1E2; color: var(--color-green); }
+.tag-active { background: #FFF3CC; color: #8A5800; }
+.tag-cancelled { background: #F0F0F2; color: var(--color-soft); }
+.tag-bb { background: #101B46; color: #C2D500; }
+.tag-gb { background: #F0F0F2; color: #101B46; }
+.tag-site { background: var(--color-navy); color: white; font-weight: 700; }
+
+/* === DMAIC PIPELINE === */
+.pipeline {
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;
+  align-items: flex-end; height: 160px;
+}
+.phase-bar { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 8px; height: 100%; }
+.phase-fill { width: 100%; border-radius: 3px 3px 0 0; position: relative; min-height: 4px; }
+.phase-fill .count {
+  position: absolute; top: -22px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-display); font-weight: 800; color: var(--color-navy); font-size: 18px;
+}
+.phase-fill.define { background: #4A5378; }
+.phase-fill.measure { background: #3A4470; }
+.phase-fill.analyze { background: #2A3458; }
+.phase-fill.improve { background: var(--color-navy); }
+.phase-fill.control { background: var(--color-teal); }
+.phase-fill.closed { background: var(--color-green); }
+.phase-label {
+  font-family: var(--font-display); font-size: 11px; font-weight: 700;
+  color: var(--color-navy); letter-spacing: 0.06em; text-align: center;
+}
+
+/* === SITE LEADERBOARD === */
+.site-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.site-card {
+  background: var(--color-bg); border-left: 3px solid var(--color-lime);
+  padding: 14px 14px 12px; border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(16, 27, 70, 0.06);
+}
+.site-card.empty { border-left-color: var(--color-soft); opacity: 0.6; }
+.site-card.hot { border-left-color: var(--color-teal); }
+.site-name {
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  color: var(--color-navy); letter-spacing: 0.08em; margin-bottom: 8px;
+  display: flex; justify-content: space-between;
+}
+.site-name .code {
+  font-size: 9px; background: var(--color-navy); color: white;
+  padding: 2px 6px; border-radius: 2px; font-weight: 700;
+}
+.site-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.site-stat-num {
+  font-family: var(--font-display); font-weight: 800; font-size: 18px;
+  color: var(--color-navy); line-height: 1;
+}
+.site-stat-lbl {
+  font-family: var(--font-body); font-size: 9px; color: var(--color-text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;
+}
+
+/* === FOOTER === */
+.footer {
+  margin-top: 36px; padding-top: 18px;
+  border-top: 1px solid var(--color-navy-10);
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-body); font-size: 11px; color: var(--color-soft);
+}
+.footer-data-source { color: var(--color-text-muted); }
+.footer-data-source strong { color: var(--color-navy); }
+
+@media (max-width: 1280px) {
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+  .row-1-1, .row-2-1 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING STATE -->
+<div class="loader" id="loader">
+  <div class="loader-spinner"></div>
+  <div class="loader-text">Loading CI Caribbean data…</div>
+  <div class="loader-sub">Reading Argos_CI_Caribbean_Tracker_v2.xlsx</div>
+</div>
+
+<!-- ERROR STATE -->
+<div class="error-state" id="errorBox" style="display:none;">
+  <div class="error-title">⚠ Could not find the Excel tracker</div>
+  <div class="error-msg" id="errorMsg"></div>
+  <label class="upload-btn">
+    Browse for the Excel file
+    <input type="file" id="fileInput" accept=".xlsx">
+  </label>
+</div>
+
+<!-- DASHBOARD -->
+<div class="dashboard" id="dashboard" style="display:none;">
+
+  <div class="header">
+    <div>
+      <div class="brand">ARGOS</div>
+      <div class="header-title">
+        <h1>CI CARIBBEAN — Continuous Improvement Dashboard</h1>
+        <div class="subtitle">Lean Six Sigma Program | 9 Operations | 325 Employees | Live from Excel</div>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div><span class="live-dot"></span>Connected to tracker</div>
+      <div>Loaded: <strong id="loadTime">—</strong></div>
+      <button class="reload-btn" onclick="location.reload()">↻ REFRESH DATA</button>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <!-- ROW: Donut + Funnel -->
+  <div class="section-row row-1-1">
+    <div class="panel accent">
+      <div class="panel-header">
+        <div class="panel-title">Project Portfolio Status</div>
+        <div class="panel-context" id="portfolioContext"></div>
+      </div>
+      <div class="donut-container">
+        <svg class="donut-svg" id="donutSvg" viewBox="0 0 100 100"></svg>
+        <div class="donut-legend" id="donutLegend"></div>
+      </div>
+    </div>
+    <div class="panel teal">
+      <div class="panel-header">
+        <div class="panel-title">Belt Engagement Funnel</div>
+        <div class="panel-context">From training to delivered savings</div>
+      </div>
+      <div class="funnel" id="funnel"></div>
+    </div>
+  </div>
+
+  <!-- ROW: Savings chart -->
+  <div class="section-row row-full">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Savings Realization — Current FY</div>
+        <div class="panel-context" id="savingsContext"></div>
+      </div>
+      <div class="savings-chart">
+        <svg class="savings-svg" id="savingsSvg" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="savings-legend">
+        <div class="savings-legend-item"><div class="savings-legend-line" style="background:#101B46"></div>Validated Actual</div>
+        <div class="savings-legend-item"><div class="savings-legend-line" style="background:#101B46; opacity:0.5; background-image:linear-gradient(90deg,#101B46 50%,transparent 50%); background-size:6px 100%;"></div>Forecast (Plan)</div>
+        <div class="savings-legend-item"><div class="savings-legend-line" style="background:#9AA0B2; background-image:linear-gradient(90deg,#9AA0B2 50%,transparent 50%); background-size:6px 100%;"></div>Annual Target</div>
+        <div class="savings-legend-item" style="margin-left:auto;color:var(--color-navy);font-weight:700;" id="savingsPace"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW: Projects table + DMAIC pipeline -->
+  <div class="section-row row-2-1">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Active &amp; Closed Projects</div>
+        <div class="panel-context">From 01_Projects sheet</div>
+      </div>
+      <table class="projects-table">
+        <thead>
+          <tr><th>Project</th><th>Type</th><th>Site</th><th>Belt Owner</th><th>Phase</th><th>Status</th><th style="text-align:right;">Savings (USD)</th></tr>
+        </thead>
+        <tbody id="projectsTbody"></tbody>
+      </table>
+    </div>
+    <div class="panel teal">
+      <div class="panel-header">
+        <div class="panel-title">DMAIC Pipeline</div>
+        <div class="panel-context">Active &amp; closed projects</div>
+      </div>
+      <div class="pipeline" id="pipeline"></div>
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--color-navy-10); font-family:var(--font-body); font-size:11px; color:var(--color-text-muted);">
+        <span id="pipelineNote"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ROW: Site leaderboard -->
+  <div class="section-row row-full">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Site Leaderboard</div>
+        <div class="panel-context">Engagement across 9 operations</div>
+      </div>
+      <div class="site-grid" id="siteGrid"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>ARGOS © Copyright 2026 — All rights reserved</div>
+    <div class="footer-data-source">Source: <strong>Argos_CI_Caribbean_Tracker_v2.xlsx</strong> · Edit Excel → refresh page → dashboard updates</div>
+  </div>
+
+</div>
+
+<script>
+// =====================================================================
+// CI CARIBBEAN DASHBOARD - EXCEL LIVE CONNECTION
+// =====================================================================
+// This dashboard reads the Excel tracker directly from the same folder.
+// Edit the Excel, save it, refresh this page, and you see the new data.
+// =====================================================================
+
+const EXCEL_FILE = 'Argos_CI_Caribbean_Tracker_v2.xlsx';
+const TOTAL_WORKFORCE = 325;
+const ANNUAL_TARGET = 1000000;
+const YELLOW_BELT_TRAINED = 80;  // adjust here if not yet tracked individually in Belts sheet
+
+// ---- Bootstrap ----
+window.addEventListener('DOMContentLoaded', () => {
+  loadFromUrl(EXCEL_FILE);
+
+  document.getElementById('fileInput').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) loadFromFile(file);
+  });
+});
+
+async function loadFromUrl(url) {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const buffer = await resp.arrayBuffer();
+    parseAndRender(buffer);
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function loadFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => parseAndRender(e.target.result);
+  reader.onerror = () => showError(new Error('Could not read selected file'));
+  reader.readAsArrayBuffer(file);
+}
+
+function showError(err) {
+  document.getElementById('loader').classList.add('hidden');
+  document.getElementById('errorBox').style.display = 'block';
+  const msg = document.getElementById('errorMsg');
+  msg.innerHTML = `
+    <p>The dashboard could not load <code>${EXCEL_FILE}</code> automatically.</p>
+    <p style="margin-top:8px;"><strong>This is normal if:</strong></p>
+    <ul style="margin:8px 0 12px 20px; line-height:1.7;">
+      <li>You opened this HTML directly by double-click (browsers block local file access for security).</li>
+      <li>The Excel file is in a different folder than this HTML.</li>
+      <li>The Excel filename does not match <code>${EXCEL_FILE}</code>.</li>
+    </ul>
+    <p><strong>Quick fix:</strong> click "Browse" and select the Excel manually — it works immediately.</p>
+    <p style="margin-top:8px;"><strong>Permanent fix:</strong> host this HTML and the Excel on SharePoint in the same folder (or any web server). See README.</p>
+    <p style="margin-top:12px; color:#888; font-size:11px;">Technical detail: ${err.message}</p>
+  `;
+}
+
+function parseAndRender(buffer) {
+  try {
+    const wb = XLSX.read(buffer, { type: 'array', cellDates: true });
+    const data = {
+      projects: sheetToObjects(wb, '01_Projects', 4),
+      belts:    sheetToObjects(wb, '02_Belts', 4),
+      training: sheetToObjects(wb, '03_Training', 4),
+      benefits: sheetToObjects(wb, '04_Benefits', 4),
+      ideas:    sheetToObjects(wb, '05_Ideas', 4),
+    };
+    render(data);
+    document.getElementById('loader').classList.add('hidden');
+    document.getElementById('dashboard').style.display = 'block';
+    document.getElementById('loadTime').textContent = new Date().toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  } catch (err) {
+    showError(err);
+  }
+}
+
+// Convert sheet to array of objects using row N as header
+function sheetToObjects(wb, sheetName, headerRow) {
+  const sheet = wb.Sheets[sheetName];
+  if (!sheet) return [];
+  // Get all rows as array-of-arrays starting from header row
+  const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+  if (aoa.length < headerRow) return [];
+  const headers = aoa[headerRow - 1].map(h => (h || '').toString().trim());
+  const rows = aoa.slice(headerRow);
+  return rows
+    .filter(r => r[0])  // skip empty rows
+    .map(r => {
+      const obj = {};
+      headers.forEach((h, i) => { if (h) obj[h] = r[i]; });
+      return obj;
+    });
+}
+
+// Parse numeric values that may arrive as strings like "$185,000", "$1,234.56", "-", "(500)", or "5.2%"
+function parseNum(val) {
+  if (val == null || val === '' || val === '-') return 0;
+  if (typeof val === 'number') return val;
+  const s = String(val).trim();
+  if (s === '-' || s === '' || s === 'TBD') return 0;
+  // Strip $, spaces, commas; handle parentheses as negative; strip trailing %
+  const isNegative = s.startsWith('(') && s.endsWith(')');
+  const cleaned = s.replace(/[$,\s%()]/g, '');
+  const n = parseFloat(cleaned);
+  if (isNaN(n)) return 0;
+  return isNegative ? -n : n;
+}
+
+// Parse month-year strings like "Apr-2026" or "April 2026" or Excel serial dates
+function parseMonthYear(val) {
+  if (val == null || val === '') return null;
+  if (val instanceof Date) return val;
+  const s = String(val).trim();
+  // "Apr-2026" or "Apr 2026"
+  const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const match = s.match(/^([A-Za-z]{3,})[\s\-\/]+(\d{4})$/);
+  if (match) {
+    const m = months[match[1].toLowerCase().substring(0, 3)];
+    if (m !== undefined) return new Date(parseInt(match[2]), m, 1);
+  }
+  // Fallback
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// =====================================================================
+// RENDER
+// =====================================================================
+function render(d) {
+  renderKPIs(d);
+  renderDonut(d);
+  renderFunnel(d);
+  renderSavings(d);
+  renderProjects(d);
+  renderPipeline(d);
+  renderSites(d);
+}
+
+// ---- KPIs ----
+function renderKPIs(d) {
+  const trainedFromBelts = d.belts.length;
+  const yb = YELLOW_BELT_TRAINED;
+  const gb = d.belts.filter(b => (b.Belt_Level || '').includes('Green')).length;
+  const bb = d.belts.filter(b => (b.Belt_Level || '').includes('Black')).length;
+  const totalTrained = yb + gb + bb;
+
+  const active = d.projects.filter(p => p.Status === 'Active').length;
+  const closedBenefits = d.projects.filter(p => p.Status === 'Closed-Benefits').length;
+  const cancelled = d.projects.filter(p => p.Status === 'Cancelled').length;
+  const activeBB = d.projects.filter(p => p.Status === 'Active' && (p.Project_Type || '').includes('Black')).length;
+  const activeGB = d.projects.filter(p => p.Status === 'Active' && (p.Project_Type || '').includes('Green')).length;
+
+  // YTD validated savings (Actual + Validated=Yes)
+  const ytdSavings = d.benefits
+    .filter(b => b.Plan_or_Actual === 'Actual' && b.Validated_By_Finance === 'Yes')
+    .reduce((sum, b) => sum + parseNum(b.Amount_USD), 0);
+
+  // FY forecast: all actual + planned from the benefits sheet
+  const fyForecast = d.benefits
+    .reduce((sum, b) => sum + parseNum(b.Amount_USD), 0);
+
+  const ideasCount = d.ideas.length;
+  const ideasApproved = d.ideas.filter(i => i.Status === 'Approved').length;
+
+  const html = `
+    <div class="kpi-card">
+      <div class="kpi-label">Belts Trained</div>
+      <div class="kpi-value">${totalTrained}</div>
+      <div class="kpi-sub">YB ${yb} · GB ${gb} · BB ${bb}</div>
+    </div>
+    <div class="kpi-card navy">
+      <div class="kpi-label">Active Projects</div>
+      <div class="kpi-value">${active}</div>
+      <div class="kpi-sub">${activeBB} Black Belt · ${activeGB} Green Belt</div>
+    </div>
+    <div class="kpi-card teal">
+      <div class="kpi-label">Closed With Benefits</div>
+      <div class="kpi-value">${closedBenefits}</div>
+      <div class="kpi-sub">Finance validated</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Validated Savings YTD</div>
+      <div class="kpi-value">${formatMoney(ytdSavings)}</div>
+      <div class="kpi-sub">From 04_Benefits sheet</div>
+    </div>
+    <div class="kpi-card navy">
+      <div class="kpi-label">FY Forecast</div>
+      <div class="kpi-value">${formatMoney(fyForecast)}</div>
+      <div class="kpi-sub">Actual + Plan in benefits</div>
+    </div>
+    <div class="kpi-card teal">
+      <div class="kpi-label">Ideas Hopper</div>
+      <div class="kpi-value">${ideasCount}</div>
+      <div class="kpi-sub">${ideasApproved} approved</div>
+    </div>
+  `;
+  document.getElementById('kpiGrid').innerHTML = html;
+}
+
+function formatMoney(amount) {
+  if (amount >= 1000000) return `$${(amount/1000000).toFixed(1)}<span class="unit">M</span>`;
+  if (amount >= 1000) return `$${Math.round(amount/1000)}<span class="unit">K</span>`;
+  return `$${Math.round(amount)}`;
+}
+
+// ---- Donut ----
+function renderDonut(d) {
+  const closed = d.projects.filter(p => p.Status === 'Closed-Benefits').length;
+  const active = d.projects.filter(p => p.Status === 'Active').length;
+  const cancelled = d.projects.filter(p => p.Status === 'Cancelled').length;
+  const total = closed + active + cancelled;
+  const cancelRate = total ? Math.round((cancelled / total) * 100) : 0;
+
+  document.getElementById('portfolioContext').textContent = `${total} chartered projects · ${closed} closed · ${active} active · ${cancelled} cancelled`;
+
+  // SVG donut math
+  const C = 2 * Math.PI * 38; // circumference
+  const seg = (n) => (n / total) * C;
+  const greenLen = seg(closed);
+  const amberLen = seg(active);
+  const greyLen = seg(cancelled);
+
+  const svg = `
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#F0F1F4" stroke-width="14"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#2E8540" stroke-width="14"
+      stroke-dasharray="${greenLen} ${C - greenLen}" stroke-dashoffset="0" transform="rotate(-90 50 50)"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#F7B500" stroke-width="14"
+      stroke-dasharray="${amberLen} ${C - amberLen}" stroke-dashoffset="${-greenLen}" transform="rotate(-90 50 50)"/>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#9AA0B2" stroke-width="14"
+      stroke-dasharray="${greyLen} ${C - greyLen}" stroke-dashoffset="${-(greenLen + amberLen)}" transform="rotate(-90 50 50)"/>
+    <text class="donut-center" x="50" y="48" text-anchor="middle" font-size="22">${total}</text>
+    <text class="donut-center-label" x="50" y="60" text-anchor="middle" font-size="6">PROJECTS</text>
+  `;
+  document.getElementById('donutSvg').innerHTML = svg;
+
+  document.getElementById('donutLegend').innerHTML = `
+    <div class="donut-legend-item">
+      <div class="donut-legend-dot" style="background:#2E8540"></div>
+      <div class="donut-legend-label">Closed — Benefits</div>
+      <div class="donut-legend-value">${closed}</div>
+    </div>
+    <div class="donut-legend-item">
+      <div class="donut-legend-dot" style="background:#F7B500"></div>
+      <div class="donut-legend-label">Active</div>
+      <div class="donut-legend-value">${active}</div>
+    </div>
+    <div class="donut-legend-item">
+      <div class="donut-legend-dot" style="background:#9AA0B2"></div>
+      <div class="donut-legend-label">Cancelled</div>
+      <div class="donut-legend-value">${cancelled}</div>
+    </div>
+    <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--color-navy-10); font-size:11px; color:var(--color-text-muted);">
+      <strong style="color:var(--color-navy)">Cancellation rate: ${cancelRate}%</strong> — target ≤25% for next cohort.
+    </div>
+  `;
+}
+
+// ---- Funnel ----
+function renderFunnel(d) {
+  const yb = YELLOW_BELT_TRAINED;
+  const gbCount = d.belts.filter(b => (b.Belt_Level || '').includes('Green')).length;
+  const bbCount = d.belts.filter(b => (b.Belt_Level || '').includes('Black')).length;
+  const totalTrained = yb + gbCount + bbCount;
+  const gbbb = gbCount + bbCount;
+
+  // GB+BB with active or closed project
+  const beltOwnersWithProjects = new Set(
+    d.projects
+      .filter(p => p.Status === 'Active' || p.Status === 'Closed-Benefits')
+      .map(p => p.Belt_Owner)
+      .filter(Boolean)
+  );
+  const withProject = d.belts.filter(b =>
+    (b.Belt_Level || '').match(/Green|Black/) &&
+    beltOwnersWithProjects.has(b.Full_Name)
+  ).length;
+
+  const closedWithBenefits = d.belts.filter(b => parseNum(b.Closed_Benefits_Projects) > 0).length;
+
+  const html = `
+    <div class="funnel-step s1">
+      <div class="funnel-label">Total Belts Trained</div>
+      <div class="funnel-value">${totalTrained}</div>
+    </div>
+    <div class="funnel-conversion"><strong>${pct(gbbb, totalTrained)}%</strong> received Green or Black Belt training</div>
+    <div class="funnel-step s2">
+      <div class="funnel-label">Green + Black Belts</div>
+      <div class="funnel-value">${gbbb}</div>
+    </div>
+    <div class="funnel-conversion"><strong>${pct(withProject, gbbb)}%</strong> have an active or closed project</div>
+    <div class="funnel-step s3">
+      <div class="funnel-label">GB+BB with Active/Closed Project</div>
+      <div class="funnel-value">${withProject}</div>
+    </div>
+    <div class="funnel-conversion"><strong>${pct(closedWithBenefits, gbbb)}%</strong> delivered Finance-validated savings</div>
+    <div class="funnel-step s4">
+      <div class="funnel-label">Belts with Closed Benefits</div>
+      <div class="funnel-value">${closedWithBenefits}</div>
+    </div>
+  `;
+  document.getElementById('funnel').innerHTML = html;
+}
+
+function pct(a, b) { return b ? Math.round((a / b) * 100) : 0; }
+
+// ---- Savings chart ----
+function renderSavings(d) {
+  // Group benefits by month
+  const monthly = {};
+  d.benefits.forEach(b => {
+    const date = parseMonthYear(b.Month_Year);
+    if (!date) return;
+    const key = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+    if (!monthly[key]) monthly[key] = { actual: 0, plan: 0, date };
+    const amt = parseNum(b.Amount_USD);
+    if (b.Plan_or_Actual === 'Actual') monthly[key].actual += amt;
+    else if (b.Plan_or_Actual === 'Plan') monthly[key].plan += amt;
+  });
+
+  // Build cumulative series across calendar months Jan–Dec of current year
+  const currentYear = new Date().getFullYear();
+  const months = [];
+  let cumActual = 0;
+  let cumPlan = 0;
+  let lastActualIdx = -1;
+
+  for (let m = 0; m < 12; m++) {
+    const key = `${currentYear}-${String(m+1).padStart(2,'0')}`;
+    if (monthly[key]) {
+      cumActual += monthly[key].actual;
+      cumPlan += monthly[key].plan;
+      if (monthly[key].actual > 0) lastActualIdx = m;
+    }
+    months.push({ idx: m, actual: cumActual, plan: cumPlan });
+  }
+
+  const maxVal = Math.max(ANNUAL_TARGET, cumActual + cumPlan);
+  const xFor = (i) => 80 + (i * (660 / 11));
+  const yFor = (v) => 180 - (v / maxVal) * 160;
+
+  // Actual line points (up to last actual)
+  const actualPts = months
+    .filter((_, i) => i <= Math.max(lastActualIdx, 0))
+    .map(p => `${xFor(p.idx)},${yFor(p.actual)}`)
+    .join(' ');
+
+  // Forecast points (continues from last actual through end of year with cumulative actual + plan)
+  const forecastPts = months
+    .filter((_, i) => i >= Math.max(lastActualIdx, 0))
+    .map(p => `${xFor(p.idx)},${yFor(p.actual + p.plan)}`)
+    .join(' ');
+
+  const monthLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthLabelsSvg = monthLabels.map((m, i) =>
+    `<text class="axis-label" x="${xFor(i)}" y="195" text-anchor="middle">${m}</text>`
+  ).join('');
+
+  // Y-axis ticks at 0, 25%, 50%, 75%, 100% of target line
+  const yTicks = [0, 0.25, 0.5, 0.75, 1.0].map(t => {
+    const v = maxVal * t;
+    const y = yFor(v);
+    return `
+      <line class="axis-line" x1="40" y1="${y}" x2="780" y2="${y}"/>
+      <text class="axis-label" x="35" y="${y+3}" text-anchor="end">${formatMoneyPlain(v)}</text>
+    `;
+  }).join('');
+
+  const targetLine = `<line class="line-target" x1="80" y1="180" x2="740" y2="${yFor(ANNUAL_TARGET)}"/>`;
+
+  const dots = months
+    .filter((_, i) => i <= lastActualIdx && i >= 0)
+    .map((p, i, arr) => {
+      const isLast = i === arr.length - 1;
+      return `<circle class="${isLast ? 'dot-current' : 'dot-actual'}" cx="${xFor(p.idx)}" cy="${yFor(p.actual)}" r="${isLast ? 5 : 3}"/>`;
+    }).join('');
+
+  document.getElementById('savingsSvg').innerHTML = `
+    ${yTicks}
+    ${monthLabelsSvg}
+    ${targetLine}
+    ${actualPts ? `<polyline class="line-actual" points="${actualPts}"/>` : ''}
+    ${forecastPts ? `<polyline points="${forecastPts}" style="stroke:#101B46;stroke-width:2;stroke-dasharray:3 4;fill:none;opacity:0.5"/>` : ''}
+    ${dots}
+    <text class="axis-label" x="745" y="${yFor(ANNUAL_TARGET) - 8}" font-weight="600" fill="#9AA0B2">Target ${formatMoneyPlain(ANNUAL_TARGET)}</text>
+  `;
+
+  document.getElementById('savingsContext').textContent =
+    `Monthly cumulative validated savings · Target ${formatMoneyPlain(ANNUAL_TARGET)}`;
+
+  const forecastTotal = cumActual + cumPlan;
+  document.getElementById('savingsPace').textContent =
+    `Forecast ${formatMoneyPlain(forecastTotal)} · ${pct(forecastTotal, ANNUAL_TARGET)}% of target`;
+}
+
+function formatMoneyPlain(amount) {
+  if (amount >= 1000000) return `$${(amount/1000000).toFixed(1)}M`;
+  if (amount >= 1000) return `$${Math.round(amount/1000)}K`;
+  return `$${Math.round(amount)}`;
+}
+
+// ---- Projects table ----
+function renderProjects(d) {
+  // Sort: Closed-Benefits first, then Active (by estimated savings desc), then Cancelled
+  const statusOrder = { 'Closed-Benefits': 1, 'Active': 2, 'On-Hold': 3, 'Cancelled': 4, 'Proposed': 5, 'Closed-NoBenefits': 6 };
+  const sorted = [...d.projects].sort((a, b) => {
+    const sa = statusOrder[a.Status] || 99;
+    const sb = statusOrder[b.Status] || 99;
+    if (sa !== sb) return sa - sb;
+    // Within same status: BB before GB
+    const aBB = (a.Project_Type || '').includes('Black') ? 0 : 1;
+    const bBB = (b.Project_Type || '').includes('Black') ? 0 : 1;
+    return aBB - bBB;
+  });
+
+  const html = sorted.map(p => {
+    const type = (p.Project_Type || '').includes('Black') ? 'BB' :
+                 (p.Project_Type || '').includes('Green') ? 'GB' :
+                 (p.Project_Type || '').includes('Kaizen') ? 'KZ' : '—';
+    const typeClass = type === 'BB' ? 'tag-bb' : 'tag-gb';
+    const statusClass = p.Status === 'Closed-Benefits' ? 'tag-closed' :
+                        p.Status === 'Active' ? 'tag-active' : 'tag-cancelled';
+    const savings = parseNum(p.Hard_Savings_USD) + parseNum(p.Cost_Avoidance_USD);
+    const savingsCell = p.Status === 'Closed-Benefits' && savings > 0
+      ? `${formatMoneyPlain(savings)} <span style="font-size:10px;color:var(--color-green);font-weight:600;">✓</span>`
+      : (savings > 0 ? `${formatMoneyPlain(savings)} <span style="font-size:10px;color:var(--color-text-muted);font-weight:400;">est.</span>` :
+         (p.Status === 'Cancelled' ? '<span style="color:var(--color-soft)">—</span>' : '<span style="color:var(--color-text-muted);font-size:11px;">In progress</span>'));
+    const opacity = p.Status === 'Cancelled' ? 'opacity:0.55;' : '';
+
+    return `
+      <tr style="${opacity}">
+        <td><strong>${esc(p.Project_Name || '')}</strong></td>
+        <td><span class="tag ${typeClass}">${type}</span></td>
+        <td><span class="tag tag-site">${esc(p.Site || '')}</span></td>
+        <td>${esc(p.Belt_Owner || '—')}</td>
+        <td>${esc(p.DMAIC_Phase || '—')}</td>
+        <td><span class="tag ${statusClass}">${esc(p.Status || '')}</span></td>
+        <td>${savingsCell}</td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('projectsTbody').innerHTML = html;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+// ---- DMAIC Pipeline ----
+function renderPipeline(d) {
+  const phases = ['Define', 'Measure', 'Analyze', 'Improve', 'Control', 'Closed'];
+  const counts = phases.map(ph =>
+    d.projects.filter(p => p.DMAIC_Phase === ph && p.Status !== 'Cancelled').length
+  );
+  const maxCount = Math.max(...counts, 1);
+
+  const html = phases.map((ph, i) => {
+    const cls = ph.toLowerCase();
+    const height = (counts[i] / maxCount) * 100;
+    return `
+      <div class="phase-bar">
+        <div class="phase-fill ${cls}" style="height: ${height}%;"><span class="count">${counts[i]}</span></div>
+        <div class="phase-label">${ph.toUpperCase()}</div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('pipeline').innerHTML = html;
+
+  const cancelled = d.projects.filter(p => p.Status === 'Cancelled').length;
+  document.getElementById('pipelineNote').innerHTML =
+    `<strong style="color:var(--color-navy)">${counts.reduce((a,b)=>a+b,0)} active+closed</strong> in DMAIC pipeline · ${cancelled} cancelled (excluded)`;
+}
+
+// ---- Site leaderboard ----
+function renderSites(d) {
+  const SITES = [
+    ['PR', 'Puerto Rico'], ['RD', 'Dom. Republic'], ['HT', 'Haiti'],
+    ['SR', 'Suriname'], ['ATG', 'Antigua'], ['SXM', 'Sint Maarten'],
+    ['STT', 'St Thomas'], ['DMA', 'Dominica'], ['GF', 'French Guiana']
+  ];
+
+  const stats = SITES.map(([code, name]) => {
+    const siteProjects = d.projects.filter(p => p.Site === code);
+    const active = siteProjects.filter(p => p.Status === 'Active').length;
+    const closed = siteProjects.filter(p => p.Status === 'Closed-Benefits').length;
+    return { code, name, active, closed };
+  });
+
+  // Sort by total non-cancelled projects desc
+  stats.sort((a, b) => (b.active + b.closed) - (a.active + a.closed));
+
+  const html = stats.map(s => {
+    const total = s.active + s.closed;
+    const cls = total === 0 ? 'empty' : (total >= 2 ? 'hot' : '');
+    return `
+      <div class="site-card ${cls}">
+        <div class="site-name">${s.name} <span class="code">${s.code}</span></div>
+        <div class="site-stats">
+          <div><div class="site-stat-num">${s.active}</div><div class="site-stat-lbl">Active</div></div>
+          <div><div class="site-stat-num">${s.closed}</div><div class="site-stat-lbl">Closed</div></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('siteGrid').innerHTML = html;
+}
+</script>
+</body>
+</html>
